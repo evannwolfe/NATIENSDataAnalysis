@@ -1,0 +1,129 @@
+# These are import statements that import the necessary libraries for the script to run
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import json
+
+# Settings.json and the data.csv files are expected to be in the same directory as the script
+# This is the function that reads the csv file and returns the dataframe
+def read_csv(file_path):
+    try:
+        # attempts to read csv and return dataframe
+        dataframe = pd.read_csv(file_path)
+        return dataframe
+    except Exception as e:
+        # handle any errors that occur during reading of csv
+        print("Error reading CSV file:", e)
+        return pd.DataFrame()
+
+# This is the function that reads the settings file and returns the settings
+def read_settings(file_path):
+    with open(file_path, 'r') as file:
+        return json.load(file)
+
+# This is the function that calculates the error for detached and attached and then returns the updated dataframe
+def calculate_error(dataframe):
+    dataframe['detached_error'] = (dataframe['total_detached'].astype(float) - dataframe['total_detached_gt'].astype(float)).abs()
+    dataframe['attached_error'] = (dataframe['total_attached'].astype(float) - dataframe['total_attached_gt'].astype(float)).abs()
+    return dataframe
+
+# this is the function that generates the box plots with the customized settings
+def generate_plot(df, settings):
+    # This returns the customization dictionary from the settings file
+    customization_dict = settings.get('customization', {})
+    # This returns the custom labels from the settings file
+    custom_labels = settings.get('customLabels', {})
+    # This returns the groups from the settings file
+    selected_groups = settings.get('groups', [])
+    # This returns the custom order from the settings file
+    custom_order = settings.get('customOrder', [])
+
+    # Copy the DataFrame so we don't modify the original
+    df = df.copy()
+
+    # Apply the filtering on the dataframe
+    if selected_groups:
+        df = df[df['redcap_data_access_group'].isin(selected_groups)]
+
+    # Apply custom sorting on the dataframe
+    if custom_order:
+        order_mapping = {name: index for index, name in enumerate(custom_order)}
+        df['custom_sort'] = df['redcap_data_access_group'].map(order_mapping)
+        df = df.sort_values('custom_sort').drop('custom_sort', axis=1)
+    # This sets the background color of the plot. Default is whitesmoke #f5f5f5
+    plot_bg_color = customization_dict.get('plot_bg_color', '#f5f5f5')
+    # This sets the background color of the figure (everything outside the plot). Default is white
+    fig_bg_color = customization_dict.get('fig_bg_color', '#ffffff')
+    # This sets the style of the plot. Default is whitegrid. You can see it to whitegrid, darkgrid, white, and dark
+    style = customization_dict.get('style', 'whitegrid')
+    # This is the figure width. Default is 15
+    fig_width = float(customization_dict.get('fig_width', 15))
+    # This is the figure height. Default is 6
+    fig_height = float(customization_dict.get('fig_height', 6))
+
+# This is the function that sets the style based on what was designated in the settings file
+    with sns.axes_style(style):
+        fig, axes = plt.subplots(1, 2, figsize=(fig_width, fig_height))
+        fig.set_facecolor(fig_bg_color)
+# This is the function that sets the background color of the plot based on what was designated in the settings file and
+    # then adds the custom x-axis labels and then adds those at a 45-degree angle
+    for ax in axes:
+        ax.set_facecolor(plot_bg_color)
+        new_labels = [f"{custom_labels.get(label, label)} ({df[df['redcap_data_access_group'] == label].shape[0]})"
+                      for label in df['redcap_data_access_group'].unique()]
+        ax.set_xticks(range(len(new_labels)))
+        ax.set_xticklabels(new_labels, rotation=45)
+# This sets the colors for the boxes for VUMC(the baseline) and for the other sites. Default is #866D4B for VUMC and
+    # #5975a4 for the other sites
+    palette = {
+        group: customization_dict.get('palette_vumc', '#866D4B') if group == 'vumc' else customization_dict.get('palette_other', '#5975a4')
+        for group in df['redcap_data_access_group'].unique()
+    }
+# Here we are setting the color, size and jitter for the points plotted on the box plot. Default is black,
+    # size of 3, and jitter set to false
+    stripplot_color = customization_dict.get('stripplot_color', 'black')
+    stripplot_size = float(customization_dict.get('stripplot_size', 3))
+    stripplot_jitter = customization_dict.get('jitter', 'false').lower() == 'true'
+# This sets the title, x-axis label, and y-axis labels
+    for i, error_type in enumerate(['detached_error', 'attached_error']):
+        title = customization_dict.get(f'{error_type}_title', f'{error_type.title()} by Site')
+        # We use a space as the default x-axis label so that the x-axis label is not displayed unless specified
+        x_label = customization_dict.get('x_label', ' ')
+        # Y axis labels
+        detached_y_label = customization_dict.get('detached_y_label', 'Detached Error (%)')
+        attached_y_label = customization_dict.get('attached_y_label', 'Attached Error (%)')
+        # Font size and color for the title, x-axis label, and y-axis label
+        # X and Y axis share font size and color parameters while Title are separate
+        font_size_title = int(customization_dict.get('font_size_title', 12))
+        font_color_title = customization_dict.get('font_color_title', '#000000')
+        font_size_axes = int(customization_dict.get('font_size_axes', 12))
+        font_color_axes = customization_dict.get('font_color_axes', '#000000')
+# This sets the title, x-axis label, and y-axis labels with their respective font size and color
+        axes[i].set_title(title, fontsize=font_size_title, color=font_color_title)
+        if x_label:
+            axes[i].set_xlabel(x_label, fontsize=font_size_axes, color=font_color_axes)
+        if error_type == 'detached_error':
+            axes[i].set_ylabel(detached_y_label, fontsize=font_size_axes, color=font_color_axes)
+        elif error_type == 'attached_error':
+            axes[i].set_ylabel(attached_y_label, fontsize=font_size_axes, color=font_color_axes)
+
+        sns.boxplot(ax=axes[i], x='redcap_data_access_group', y=error_type, data=df,
+                    hue='redcap_data_access_group', palette=palette, dodge=False, legend=False, showfliers=False)
+        sns.stripplot(ax=axes[i], x='redcap_data_access_group', y=error_type, data=df,
+                      color=stripplot_color, size=stripplot_size, jitter=stripplot_jitter)
+# Tight layout is used to adjust the padding between and around subplots. Other options are available
+    # such as: pad, w_pad,  h_pad, rect and more
+    plt.tight_layout()
+# This saves the plot as a png file in the same directory as the script
+    plt.savefig('output_plot.png')
+
+
+# Main execution
+dataframe = read_csv('data.csv')
+# This checks to see if the dataframe is empty and if it is not empty then it will run the calculations and make plots
+if not dataframe.empty:
+    dataframe = calculate_error(dataframe)
+    settings = read_settings('settings.json')
+    generate_plot(dataframe, settings)
+else:
+    print("Dataframe is empty. Please check the CSV file.")
