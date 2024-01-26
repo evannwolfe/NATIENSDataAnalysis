@@ -1,0 +1,30 @@
+{
+  "customization": {
+    "plot_bg_color": "#f5f5f5",
+    "fig_bg_color": "#ffffff",
+    "style": "whitegrid",
+    "fig_width": 15,
+    "fig_height": 6,
+    "palette_vumc": "#866D4B",
+    "palette_other": "#5975a4",
+    "stripplot_color": "black",
+    "stripplot_size": 3,
+    "jitter": "true",
+    "detached_error_title": "Detached",
+    "attached_error_title": "Attached Error by Site",
+    "x_label": " ",
+    "detached_y_label": "Detached Error (%)",
+    "attached_y_label": "Attached Error (%)",
+    "font_size_title": 12,
+    "font_color_title": "#000000",
+    "font_size_axes": 10,
+    "font_color_axes": "#333333"
+  },
+  "customLabels": {
+    "vumc": "Vanderbilt University Medical Center",
+    "jms": "This is the custom label",
+    "uw_harborview": "etc"
+  },
+  "groups": ["jms", "vumc", "uw_harborview"],
+  "customOrder": ["vumc", "jms", "uw_harborview"]
+}
