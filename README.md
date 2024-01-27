@@ -1,4 +1,4 @@
-This release is designed to simplify and streamline the process of analyzing NATIENS training data by generating insightful box plots. The tool is useful for comparing lesion estimation error across different sites.
+This application is designed to simplify and streamline the process of analyzing NATIENS training data by generating insightful box plots. The tool is useful for comparing lesion estimation error across different sites.
 
 **Key Features:**
 - **CSV Data Reading**: Loads data from CSV file, handling potential errors gracefully.
