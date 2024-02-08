@@ -3,18 +3,27 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import json
+import textwrap
 
 # Settings.json and the data.csv files are expected to be in the same directory as the script
 # This is the function that reads the csv file and returns the dataframe
 def read_csv(file_path):
     try:
-        # attempts to read csv and return dataframe
+        # Read csv and return dataframe
         dataframe = pd.read_csv(file_path)
+
+        # Specify the required columns, so that we can drop rows with missing values in those columns
+        required_columns = ['redcap_data_access_group', 'total_detached', 'total_attached', 'total_detached_gt', 'total_attached_gt']
+
+        # Drop rows where any of the required columns have missing values
+        dataframe = dataframe.dropna(subset=required_columns)
+
         return dataframe
     except Exception as e:
-        # handle any errors that occur during reading of csv
+        # Handle any errors that occur during reading of csv
         print("Error reading CSV file:", e)
         return pd.DataFrame()
+
 
 # This is the function that reads the settings file and returns the settings
 def read_settings(file_path):
@@ -25,7 +34,15 @@ def read_settings(file_path):
 def calculate_error(dataframe):
     dataframe['detached_error'] = (dataframe['total_detached'].astype(float) - dataframe['total_detached_gt'].astype(float)).abs()
     dataframe['attached_error'] = (dataframe['total_attached'].astype(float) - dataframe['total_attached_gt'].astype(float)).abs()
+
+    # Calculate mean errors for each group
+    composite_data = dataframe.groupby('redcap_data_access_group')[['detached_error', 'attached_error']].mean().reset_index()
+    composite_data['redcap_data_access_group'] = 'Composite'
+
+    # Append composite data to the DataFrame
+    dataframe = pd.concat([dataframe, composite_data], ignore_index=True)
     return dataframe
+
 
 # this is the function that generates the box plots with the customized settings
 def generate_plot(df, settings):
@@ -37,6 +54,14 @@ def generate_plot(df, settings):
     selected_groups = settings.get('groups', [])
     # This returns the custom order from the settings file
     custom_order = settings.get('customOrder', [])
+    # this returns the wrap_title from the settings file
+    wrap_title = customization_dict.get('wrap_title', False)
+    # This returns the x_tick_font_size and y_tick_font_size from the settings file
+    x_tick_font_size = customization_dict.get('x_tick_font_size', 10)
+    y_tick_font_size = customization_dict.get('y_tick_font_size', 10)
+    output_format = customization_dict.get('output_format', 'png')  # Default to 'png' if not specified
+
+
 
     # Copy the DataFrame so we don't modify the original
     df = df.copy()
@@ -73,6 +98,9 @@ def generate_plot(df, settings):
                       for label in df['redcap_data_access_group'].unique()]
         ax.set_xticks(range(len(new_labels)))
         ax.set_xticklabels(new_labels, rotation=45)
+        # Set x-tick and y-tick font sizes
+        ax.tick_params(axis='x', labelsize=x_tick_font_size)
+        ax.tick_params(axis='y', labelsize=y_tick_font_size)
 # This sets the colors for the boxes for VUMC(the baseline) and for the other sites. Default is #866D4B for VUMC and
     # #5975a4 for the other sites
     palette = {
@@ -87,6 +115,12 @@ def generate_plot(df, settings):
 # This sets the title, x-axis label, and y-axis labels
     for i, error_type in enumerate(['detached_error', 'attached_error']):
         title = customization_dict.get(f'{error_type}_title', f'{error_type.title()} by Site')
+
+        # Check if wrap_title is True before applying word wrapping
+        if wrap_title:
+            wrap_width = customization_dict.get(f'{error_type}_title_wrap_width',
+                                                10)  # Use default wrap width if not specified
+            title = "\n".join(textwrap.wrap(title, width=wrap_width))
         # We use a space as the default x-axis label so that the x-axis label is not displayed unless specified
         x_label = customization_dict.get('x_label', ' ')
         # Y axis labels
@@ -115,8 +149,9 @@ def generate_plot(df, settings):
     # such as: pad, w_pad,  h_pad, rect and more
     plt.tight_layout()
 # This saves the plot as a png file in the same directory as the script
-    plt.savefig('output_plot.png')
-
+    plt.savefig(f'output_plot.{output_format}')
+    if output_format == 'png':
+        plt.savefig(f'output_plot.{output_format}', dpi=300)  # Specify DPI for higher resolution
 
 # Main execution
 dataframe = read_csv('data.csv')
