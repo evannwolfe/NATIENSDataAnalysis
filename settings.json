@@ -18,7 +18,13 @@
     "font_size_title": 12,
     "font_color_title": "#000000",
     "font_size_axes": 10,
-    "font_color_axes": "#333333"
+    "font_color_axes": "#333333",
+    "wrap_title": false,
+    "detached_error_title_wrap_width": 10,
+    "attached_error_title_wrap_width": 10,
+    "x_tick_font_size": 10,
+    "y_tick_font_size": 10,
+    "output_format": "pdf"
   },
   "customLabels": {
     "vumc": "Vanderbilt University Medical Center",
