@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 import textwrap
+from matplotlib import patheffects as path_effects
+
 
 # Settings.json and the data.csv files are expected to be in the same directory as the script
 # This is the function that reads the csv file and returns the dataframe
@@ -30,6 +32,7 @@ def read_settings(file_path):
     with open(file_path, 'r') as file:
         return json.load(file)
 
+
 # This is the function that calculates the error for detached and attached and then returns the updated dataframe
 def calculate_error(dataframe):
     dataframe['detached_error'] = (dataframe['total_detached'].astype(float) - dataframe['total_detached_gt'].astype(float)).abs()
@@ -42,6 +45,37 @@ def calculate_error(dataframe):
     # Append composite data to the DataFrame
     dataframe = pd.concat([dataframe, composite_data], ignore_index=True)
     return dataframe
+
+# Function to calculate and overlay median value labels
+def add_median_labels(ax, settings):
+    show_median = settings.get("show_median", True)
+    color = settings.get("color", "white")
+    foreground_color = settings.get("foreground_color", "black")
+    fontsize = settings.get("font_size", None)
+    median_outline = settings.get("median_outline", False)
+
+    if not show_median:
+        return []
+
+    lines = ax.get_lines()
+    boxes = [c for c in ax.get_children() if type(c).__name__ == 'PathPatch']
+    if not boxes:
+        return []
+
+    lines_per_box = int(len(lines) / len(boxes))
+    median_list = []
+    for median in lines[4:len(lines):lines_per_box]:
+        x, y = (data.mean() for data in median.get_data())
+        value = x if (median.get_xdata()[1] - median.get_xdata()[0]) == 0 else y
+        text = ax.text(x, y, f'{value:.2f}', ha='center', va='center',
+                       fontweight='bold', color=color, fontsize=fontsize)
+        if median_outline:
+            text.set_path_effects([
+                path_effects.Stroke(linewidth=3, foreground=foreground_color),
+                path_effects.Normal(),
+            ])
+        median_list.extend([value])
+    return median_list
 
 
 # this is the function that generates the box plots with the customized settings
@@ -59,9 +93,10 @@ def generate_plot(df, settings):
     # This returns the x_tick_font_size and y_tick_font_size from the settings file
     x_tick_font_size = customization_dict.get('x_tick_font_size', 10)
     y_tick_font_size = customization_dict.get('y_tick_font_size', 10)
-    output_format = customization_dict.get('output_format', 'png')  # Default to 'png' if not specified
-
-
+    # This returns the designated output from the settings file
+    output_format = customization_dict.get('output_format', 'png')
+    # This returns the settings for the median value labels
+    median_label_settings = customization_dict.get('median_label', {})
 
     # Copy the DataFrame so we don't modify the original
     df = df.copy()
@@ -85,22 +120,34 @@ def generate_plot(df, settings):
     fig_width = float(customization_dict.get('fig_width', 15))
     # This is the figure height. Default is 6
     fig_height = float(customization_dict.get('fig_height', 6))
+    # This retrieves the label wrap width from the settings, defaulting to 10
+    label_wrap_width = customization_dict.get('label_wrap_width', 10)
+    # Use the DPI setting from the settings file, default to 300
+    dpi = customization_dict.get('dpi', 300)
+    # Determine which point plot type to use based on settings
+    point_plot_type = customization_dict.get('point_plot_type', 'beeswarm')  # Default to beeswarm if not specified
 
 # This is the function that sets the style based on what was designated in the settings file
     with sns.axes_style(style):
         fig, axes = plt.subplots(1, 2, figsize=(fig_width, fig_height))
         fig.set_facecolor(fig_bg_color)
+
 # This is the function that sets the background color of the plot based on what was designated in the settings file and
-    # then adds the custom x-axis labels and then adds those at a 45-degree angle
     for ax in axes:
         ax.set_facecolor(plot_bg_color)
-        new_labels = [f"{custom_labels.get(label, label)} ({df[df['redcap_data_access_group'] == label].shape[0]})"
-                      for label in df['redcap_data_access_group'].unique()]
+        new_labels = []
+        for label in df['redcap_data_access_group'].unique():
+            custom_label = custom_labels.get(label, label)
+            # Wrap each label to a max width, for example, 20 characters
+            wrapped_label = "\n".join(textwrap.wrap(custom_label, width=label_wrap_width))
+            new_labels.append(f"{wrapped_label} ({df[df['redcap_data_access_group'] == label].shape[0]})")
+
         ax.set_xticks(range(len(new_labels)))
-        ax.set_xticklabels(new_labels, rotation=45)
+        ax.set_xticklabels(new_labels)
         # Set x-tick and y-tick font sizes
         ax.tick_params(axis='x', labelsize=x_tick_font_size)
         ax.tick_params(axis='y', labelsize=y_tick_font_size)
+
 # This sets the colors for the boxes for VUMC(the baseline) and for the other sites. Default is #866D4B for VUMC and
     # #5975a4 for the other sites
     palette = {
@@ -108,12 +155,14 @@ def generate_plot(df, settings):
         for group in df['redcap_data_access_group'].unique()
     }
 # Here we are setting the color, size and jitter for the points plotted on the box plot. Default is black,
-    # size of 3, and jitter set to false
-    stripplot_color = customization_dict.get('stripplot_color', 'black')
-    stripplot_size = float(customization_dict.get('stripplot_size', 3))
-    stripplot_jitter = customization_dict.get('jitter', 'false').lower() == 'true'
+    # size of 3, and jitter set to true
+    plot_color = customization_dict.get('plot_color', 'black')
+    plot_size = float(customization_dict.get('plot_point_size', 3))
+    stripplot_jitter = customization_dict.get('stripplot_jitter', True)
 # This sets the title, x-axis label, and y-axis labels
-    for i, error_type in enumerate(['detached_error', 'attached_error']):
+    error_types = ['detached_error', 'attached_error']
+    for i, ax in enumerate(axes):
+        error_type = error_types[i]
         title = customization_dict.get(f'{error_type}_title', f'{error_type.title()} by Site')
 
         # Check if wrap_title is True before applying word wrapping
@@ -143,15 +192,25 @@ def generate_plot(df, settings):
 
         sns.boxplot(ax=axes[i], x='redcap_data_access_group', y=error_type, data=df,
                     hue='redcap_data_access_group', palette=palette, dodge=False, legend=False, showfliers=False)
-        sns.stripplot(ax=axes[i], x='redcap_data_access_group', y=error_type, data=df,
-                      color=stripplot_color, size=stripplot_size, jitter=stripplot_jitter)
+        # Plot points according to the specified type
+        if point_plot_type == 'beeswarm':
+            sns.swarmplot(ax=axes[i], x='redcap_data_access_group', y=error_type, data=df,
+                          color=plot_color, size=plot_size)
+        elif point_plot_type == 'stripplot':
+            sns.stripplot(ax=axes[i], x='redcap_data_access_group', y=error_type, data=df,
+                          color=plot_color, size=plot_size, jitter=stripplot_jitter)
+
+        add_median_labels(ax, median_label_settings)
+
 # Tight layout is used to adjust the padding between and around subplots. Other options are available
     # such as: pad, w_pad,  h_pad, rect and more
     plt.tight_layout()
+
 # This saves the plot as a png file in the same directory as the script
     plt.savefig(f'output_plot.{output_format}')
     if output_format == 'png':
-        plt.savefig(f'output_plot.{output_format}', dpi=300)  # Specify DPI for higher resolution
+        plt.savefig(f'output_plot.{output_format}', dpi=dpi)
+
 
 # Main execution
 dataframe = read_csv('data.csv')
