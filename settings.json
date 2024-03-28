@@ -7,10 +7,9 @@
     "fig_height": 6,
     "palette_vumc": "#866D4B",
     "palette_other": "#5975a4",
-    "stripplot_color": "black",
-    "stripplot_size": 3,
-    "jitter": "true",
-    "detached_error_title": "Detached",
+    "plot_color": "black",
+    "plot_point_size": 3,
+    "detached_error_title": "Detached Error by Site",
     "attached_error_title": "Attached Error by Site",
     "x_label": " ",
     "detached_y_label": "Detached Error (%)",
@@ -24,13 +23,27 @@
     "attached_error_title_wrap_width": 10,
     "x_tick_font_size": 10,
     "y_tick_font_size": 10,
-    "output_format": "pdf"
+    "output_format": "pdf",
+    "dpi": 300,
+    "label_wrap_width": 10,
+    "point_plot_type": "beeswarm",
+    "stripplot_jitter": false,
+    "median_label": {
+      "show_median": false,
+      "color": "black",
+      "foreground_color": "white",
+      "font_size": 9,
+      "median_outline": true
+    }
   },
   "customLabels": {
     "vumc": "Vanderbilt University Medical Center",
-    "jms": "This is the custom label",
-    "uw_harborview": "etc"
+    "Composite": "Composite",
+    "jms": "Custom Label 1",
+    "uw_harborview": "Custom Label 2",
+    "valleywise_health": "Custom Label 3",
+    "medstar": "Custom Label 4"
   },
-  "groups": ["jms", "vumc", "uw_harborview"],
-  "customOrder": ["vumc", "jms", "uw_harborview"]
+  "groups": ["vumc", "jms", "medstar", "uw_harborview", "valleywise_health", "Composite"],
+  "customOrder": ["vumc", "jms", "medstar", "uw_harborview", "valleywise_health", "Composite"]
 }
