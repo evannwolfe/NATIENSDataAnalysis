@@ -33,18 +33,20 @@ def read_settings(file_path):
         return json.load(file)
 
 
-# This is the function that calculates the error for detached and attached and then returns the updated dataframe
+# This is the function that calculates the error for detached, attached, and combined (total) errors and returns the updated dataframe
 def calculate_error(dataframe):
     dataframe['detached_error'] = (dataframe['total_detached'].astype(float) - dataframe['total_detached_gt'].astype(float)).abs()
     dataframe['attached_error'] = (dataframe['total_attached'].astype(float) - dataframe['total_attached_gt'].astype(float)).abs()
+    dataframe['total_error'] = dataframe['detached_error'] + dataframe['attached_error']
 
     # Calculate mean errors for each group
-    composite_data = dataframe.groupby('redcap_data_access_group')[['detached_error', 'attached_error']].mean().reset_index()
+    composite_data = dataframe.groupby('redcap_data_access_group')[['detached_error', 'attached_error', 'total_error']].mean().reset_index()
     composite_data['redcap_data_access_group'] = 'Composite'
 
     # Append composite data to the DataFrame
     dataframe = pd.concat([dataframe, composite_data], ignore_index=True)
     return dataframe
+
 
 # Function to calculate and overlay median value labels
 def add_median_labels(ax, settings):
@@ -78,7 +80,7 @@ def add_median_labels(ax, settings):
     return median_list
 
 
-# this is the function that generates the box plots with the customized settings
+# This is the function that generates the box plots with the customized settings
 def generate_plot(df, settings):
     # This returns the customization dictionary from the settings file
     customization_dict = settings.get('customization', {})
@@ -88,7 +90,7 @@ def generate_plot(df, settings):
     selected_groups = settings.get('groups', [])
     # This returns the custom order from the settings file
     custom_order = settings.get('customOrder', [])
-    # this returns the wrap_title from the settings file
+    # This returns the wrap_title from the settings file
     wrap_title = customization_dict.get('wrap_title', False)
     # This returns the x_tick_font_size and y_tick_font_size from the settings file
     x_tick_font_size = customization_dict.get('x_tick_font_size', 10)
@@ -97,6 +99,8 @@ def generate_plot(df, settings):
     output_format = customization_dict.get('output_format', 'png')
     # This returns the settings for the median value labels
     median_label_settings = customization_dict.get('median_label', {})
+    # This returns the errors to display from the settings file
+    show_errors = customization_dict.get('show_errors', ['detached_error'])
 
     # Copy the DataFrame so we don't modify the original
     df = df.copy()
@@ -114,7 +118,7 @@ def generate_plot(df, settings):
     plot_bg_color = customization_dict.get('plot_bg_color', '#f5f5f5')
     # This sets the background color of the figure (everything outside the plot). Default is white
     fig_bg_color = customization_dict.get('fig_bg_color', '#ffffff')
-    # This sets the style of the plot. Default is whitegrid. You can see it to whitegrid, darkgrid, white, and dark
+    # This sets the style of the plot. Default is whitegrid. You can set it to whitegrid, darkgrid, white, and dark
     style = customization_dict.get('style', 'whitegrid')
     # This is the figure width. Default is 15
     fig_width = float(customization_dict.get('fig_width', 15))
@@ -127,89 +131,92 @@ def generate_plot(df, settings):
     # Determine which point plot type to use based on settings
     point_plot_type = customization_dict.get('point_plot_type', 'beeswarm')  # Default to beeswarm if not specified
 
-# This is the function that sets the style based on what was designated in the settings file
+    # Filter errors to display based on the settings
+    error_types = [error for error in ['detached_error', 'attached_error', 'total_error'] if error in show_errors]
+
+    # This is the function that sets the style based on what was designated in the settings file
     with sns.axes_style(style):
-        fig, axes = plt.subplots(1, 2, figsize=(fig_width, fig_height))
+        fig, axes = plt.subplots(1, len(error_types), figsize=(fig_width, fig_height))
         fig.set_facecolor(fig_bg_color)
 
-# This is the function that sets the background color of the plot based on what was designated in the settings file and
-    for ax in axes:
-        ax.set_facecolor(plot_bg_color)
-        new_labels = []
-        for label in df['redcap_data_access_group'].unique():
-            custom_label = custom_labels.get(label, label)
-            # Wrap each label to a max width, for example, 20 characters
-            wrapped_label = "\n".join(textwrap.wrap(custom_label, width=label_wrap_width))
-            new_labels.append(f"{wrapped_label} ({df[df['redcap_data_access_group'] == label].shape[0]})")
+        if len(error_types) == 1:
+            axes = [axes]
 
-        ax.set_xticks(range(len(new_labels)))
-        ax.set_xticklabels(new_labels)
-        # Set x-tick and y-tick font sizes
-        ax.tick_params(axis='x', labelsize=x_tick_font_size)
-        ax.tick_params(axis='y', labelsize=y_tick_font_size)
+        # This is the function that sets the background color of the plot based on what was designated in the settings file and
+        for i, ax in enumerate(axes):
+            ax.set_facecolor(plot_bg_color)
+            new_labels = []
+            for label in df['redcap_data_access_group'].unique():
+                custom_label = custom_labels.get(label, label)
+                # Wrap each label to a max width, for example, 20 characters
+                wrapped_label = "\n".join(textwrap.wrap(custom_label, width=label_wrap_width))
+                new_labels.append(f"{wrapped_label} ({df[df['redcap_data_access_group'] == label].shape[0]})")
 
-# This sets the colors for the boxes for VUMC(the baseline) and for the other sites. Default is #866D4B for VUMC and
-    # #5975a4 for the other sites
-    palette = {
-        group: customization_dict.get('palette_vumc', '#866D4B') if group == 'vumc' else customization_dict.get('palette_other', '#5975a4')
-        for group in df['redcap_data_access_group'].unique()
-    }
-# Here we are setting the color, size and jitter for the points plotted on the box plot. Default is black,
-    # size of 3, and jitter set to true
-    plot_color = customization_dict.get('plot_color', 'black')
-    plot_size = float(customization_dict.get('plot_point_size', 3))
-    stripplot_jitter = customization_dict.get('stripplot_jitter', True)
-# This sets the title, x-axis label, and y-axis labels
-    error_types = ['detached_error', 'attached_error']
-    for i, ax in enumerate(axes):
-        error_type = error_types[i]
-        title = customization_dict.get(f'{error_type}_title', f'{error_type.title()} by Site')
+            ax.set_xticks(range(len(new_labels)))
+            ax.set_xticklabels(new_labels)
+            # Set x-tick and y-tick font sizes
+            ax.tick_params(axis='x', labelsize=x_tick_font_size)
+            ax.tick_params(axis='y', labelsize=y_tick_font_size)
 
-        # Check if wrap_title is True before applying word wrapping
-        if wrap_title:
-            wrap_width = customization_dict.get(f'{error_type}_title_wrap_width',
-                                                10)  # Use default wrap width if not specified
-            title = "\n".join(textwrap.wrap(title, width=wrap_width))
-        # We use a space as the default x-axis label so that the x-axis label is not displayed unless specified
-        x_label = customization_dict.get('x_label', ' ')
-        # Y axis labels
-        detached_y_label = customization_dict.get('detached_y_label', 'Detached Error (%)')
-        attached_y_label = customization_dict.get('attached_y_label', 'Attached Error (%)')
-        # Font size and color for the title, x-axis label, and y-axis label
-        # X and Y axis share font size and color parameters while Title are separate
-        font_size_title = int(customization_dict.get('font_size_title', 12))
-        font_color_title = customization_dict.get('font_color_title', '#000000')
-        font_size_axes = int(customization_dict.get('font_size_axes', 12))
-        font_color_axes = customization_dict.get('font_color_axes', '#000000')
-# This sets the title, x-axis label, and y-axis labels with their respective font size and color
-        axes[i].set_title(title, fontsize=font_size_title, color=font_color_title)
-        if x_label:
-            axes[i].set_xlabel(x_label, fontsize=font_size_axes, color=font_color_axes)
-        if error_type == 'detached_error':
-            axes[i].set_ylabel(detached_y_label, fontsize=font_size_axes, color=font_color_axes)
-        elif error_type == 'attached_error':
-            axes[i].set_ylabel(attached_y_label, fontsize=font_size_axes, color=font_color_axes)
+        # This sets the colors for the boxes for VUMC(the baseline) and for the other sites. Default is #866D4B for VUMC and
+        # #5975a4 for the other sites
+        palette = {
+            group: customization_dict.get('palette_vumc', '#866D4B') if group == 'vumc' else customization_dict.get('palette_other', '#5975a4')
+            for group in df['redcap_data_access_group'].unique()
+        }
+        # Here we are setting the color, size and jitter for the points plotted on the box plot. Default is black,
+        # size of 3, and jitter set to true
+        plot_color = customization_dict.get('plot_color', 'black')
+        plot_size = float(customization_dict.get('plot_point_size', 3))
+        stripplot_jitter = customization_dict.get('stripplot_jitter', True)
+        # This sets the title, x-axis label, and y-axis labels
+        y_labels = {
+            'detached_error': customization_dict.get('detached_y_label', 'Detached Error (%)'),
+            'attached_error': customization_dict.get('attached_y_label', 'Attached Error (%)'),
+            'total_error': customization_dict.get('total_y_label', 'Total Error (%)')
+        }
+        for i, ax in enumerate(axes):
+            error_type = error_types[i]
+            title = customization_dict.get(f'{error_type}_title', f'{error_type.title().replace("_", " ").capitalize()} by Site')
 
-        sns.boxplot(ax=axes[i], x='redcap_data_access_group', y=error_type, data=df,
-                    hue='redcap_data_access_group', palette=palette, dodge=False, legend=False, showfliers=False)
-        # Plot points according to the specified type
-        if point_plot_type == 'beeswarm':
-            sns.swarmplot(ax=axes[i], x='redcap_data_access_group', y=error_type, data=df,
-                          color=plot_color, size=plot_size)
-        elif point_plot_type == 'stripplot':
-            sns.stripplot(ax=axes[i], x='redcap_data_access_group', y=error_type, data=df,
-                          color=plot_color, size=plot_size, jitter=stripplot_jitter)
+            # Check if wrap_title is True before applying word wrapping
+            if wrap_title:
+                wrap_width = customization_dict.get(f'{error_type}_title_wrap_width', 10)  # Use default wrap width if not specified
+                title = "\n".join(textwrap.wrap(title, width=wrap_width))
+            # We use a space as the default x-axis label so that the x-axis label is not displayed unless specified
+            x_label = customization_dict.get('x_label', ' ')
+            # Font size and color for the title, x-axis label, and y-axis label
+            # X and Y axis share font size and color parameters while Title are separate
+            font_size_title = int(customization_dict.get('font_size_title', 12))
+            font_color_title = customization_dict.get('font_color_title', '#000000')
+            font_size_axes = int(customization_dict.get('font_size_axes', 12))
+            font_color_axes = customization_dict.get('font_color_axes', '#000000')
+            # This sets the title, x-axis label, and y-axis labels with their respective font size and color
+            ax.set_title(title, fontsize=font_size_title, color=font_color_title)
+            if x_label:
+                ax.set_xlabel(x_label, fontsize=font_size_axes, color=font_color_axes)
+            ax.set_ylabel(y_labels[error_type], fontsize=font_size_axes, color=font_color_axes)
 
-        add_median_labels(ax, median_label_settings)
+            sns.boxplot(ax=ax, x='redcap_data_access_group', y=error_type, data=df,
+                        hue='redcap_data_access_group', palette=palette, dodge=False, legend=False, showfliers=False)
+            # Plot points according to the specified type
+            if point_plot_type == 'beeswarm':
+                sns.swarmplot(ax=ax, x='redcap_data_access_group', y=error_type, data=df,
+                              color=plot_color, size=plot_size)
+            elif point_plot_type == 'stripplot':
+                sns.stripplot(ax=ax, x='redcap_data_access_group', y=error_type, data=df,
+                              color=plot_color, size=plot_size, jitter=stripplot_jitter)
 
-# Tight layout is used to adjust the padding between and around subplots. Other options are available
-    # such as: pad, w_pad,  h_pad, rect and more
-    plt.tight_layout()
+            add_median_labels(ax, median_label_settings)
 
-# This saves the plot as a png file in the same directory as the script
-    plt.savefig(f'output_plot.{output_format}')
-    if output_format == 'png':
-        plt.savefig(f'output_plot.{output_format}', dpi=dpi)
+        # Tight layout is used to adjust the padding between and around subplots. Other options are available
+        # such as: pad, w_pad, h_pad, rect and more
+        plt.tight_layout()
+
+        # This saves the plot as a png file in the same directory as the script
+        plt.savefig(f'output_plot.{output_format}')
+        if output_format == 'png':
+            plt.savefig(f'output_plot.{output_format}', dpi=dpi)
 
 
 # Main execution
