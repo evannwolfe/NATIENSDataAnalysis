@@ -47,3 +47,8 @@ This application is designed to simplify and streamline the process of analyzing
 29. Custom Labels: This section maps internal group identifiers to custom labels, allowing you to easily rename groups directly from the JSON file without altering your data.
 30. groups: Specifies which groups to include in the plot. This allows for filtering the dataset before plotting.
 31. customOrder: Defines the order in which the groups should appear on the x-axis of the plots. This is useful for sorting the groups in a specific sequence.
+32. show_errors: List of errors to display. Can include "detached_error", "attached_error", and "total_error".
+33. total_error_title: Title for the plot of the total (combined detached + attached) error.
+34. total_y_label: Label for the y-axis for the total error plot.
+
+
