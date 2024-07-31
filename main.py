@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 import textwrap
+import time
 from matplotlib import patheffects as path_effects
+from tqdm import tqdm
 
 
 # Settings.json and the data.csv files are expected to be in the same directory as the script
@@ -220,11 +222,29 @@ def generate_plot(df, settings):
 
 
 # Main execution
-dataframe = read_csv('data.csv')
-# This checks to see if the dataframe is empty and if it is not empty then it will run the calculations and make plots
-if not dataframe.empty:
-    dataframe = calculate_error(dataframe)
-    settings = read_settings('settings.json')
-    generate_plot(dataframe, settings)
-else:
-    print("Dataframe is empty. Please check the CSV file.")
+print("Processing...")
+
+# progress bar
+with tqdm(total=100, desc="Progress", bar_format="{l_bar}{bar} [ time left: {remaining} ]") as pbar:
+    dataframe = read_csv('data.csv')
+    pbar.update(20)
+    time.sleep(1)
+
+    if not dataframe.empty:
+        dataframe = calculate_error(dataframe)
+        pbar.update(40)
+        time.sleep(1)
+
+        settings = read_settings('settings.json')
+        pbar.update(20)
+        time.sleep(1)
+
+        generate_plot(dataframe, settings)
+        pbar.update(20)
+        time.sleep(1)
+
+        print("Plot has been generated successfully!")
+    else:
+        print("Dataframe is empty. Please check the CSV file.")
+
+input("Press Enter to exit...")
